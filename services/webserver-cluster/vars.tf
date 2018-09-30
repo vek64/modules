@@ -39,3 +39,8 @@ variable "min_size" {
 variable "max_size" {
 	description = "Max size for ASG group"
 }
+
+variable "enable_autoscaling" {
+	description = "if set to TRUE, enable auto scaling"
+	default     = false
+}
