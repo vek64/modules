@@ -48,6 +48,7 @@ resource "aws_elb" "example" {
 }
 
 
+
 resource "aws_autoscaling_group" "example" {
 	launch_configuration = "${aws_launch_configuration.example.id}"
 	availability_zones = ["${data.aws_availability_zones.all.names}"]
@@ -65,7 +66,6 @@ resource "aws_autoscaling_group" "example" {
         }
 }
 
-
 resource "aws_launch_configuration" "example" {
 	image_id	= "${var.image_id}"
 	instance_type	= "${var.instance_type}"
@@ -78,6 +78,8 @@ resource "aws_launch_configuration" "example" {
 	}
 
 }
+
+
 
 resource "aws_security_group" "webinstance" {
     name    =       "web-${var.cluster_name}"
@@ -113,6 +115,7 @@ resource "aws_security_group_rule" "allow_all_outbound" {
 }
 
 
+
 resource "aws_autoscaling_schedule" "scale_out_during_business_hours" {
     count = "${var.enable_autoscaling}"
 
@@ -122,7 +125,7 @@ resource "aws_autoscaling_schedule" "scale_out_during_business_hours" {
     desired_capacity    = 10
     recurrence          = "0 9 * * *"
 
-    autoscaling_group_name  = "${module.webserver-cluster.asg_name}"
+    autoscaling_group_name  = "${aws_autoscaling_group.example.name}"
 	    
 }
 
@@ -135,6 +138,6 @@ resource "aws_autoscaling_schedule" "scale_in_at_night" {
     desired_capacity    = 2
     recurrence          = "0 17 * * *"
 
-    autoscaling_group_name  = "${module.webserver-cluster.asg_name}"
+    autoscaling_group_name  = "${aws_autoscaling_group.example.name}"
     
 }
