@@ -1,4 +1,3 @@
-
 variable web_server_port {
 	description = "The port server will use to listen for HTTP"
 	default	= 8080
@@ -28,8 +27,9 @@ variable "instance_type" {
 	description = "Instance type it is, eg micro or nano"
 }
 
-variable "image_id" {
-	description = "Instance type it is, eg micro or nano"
+variable "ami" {
+  description = "The AMI to run in the cluster"
+  default     = "ami-0e32ec5bc225539f5"
 }
 
 variable "min_size" {
@@ -43,4 +43,10 @@ variable "max_size" {
 variable "enable_autoscaling" {
 	description = "if set to TRUE, enable auto scaling"
 	default     = false
+}
+
+
+variable "server_text" {
+  description = "The text the web server should return"
+  default     = "Hello by DEFAULT, World from VEK"
 }

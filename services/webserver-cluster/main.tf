@@ -15,21 +15,23 @@ data "terraform_remote_state" "db" {
 
 
 data "template_file" "user_data" {
-	template = "${file("user-data.sh")}"
+  template = "${file("${path.module}/user-data.sh")}"
 
 	vars {
 		server_port = "${var.web_server_port}"
 		db_address 	= "${data.terraform_remote_state.db.address}"
 		db_port 	= "${data.terraform_remote_state.db.port}"
+    server_text = "${var.server_text}"
 	}
 }
 
 
 
+
 resource "aws_elb" "example" {
-    name    =       "elb-${var.cluster_name}"
+  name    =       "elb-${var.cluster_name}"
 	availability_zones = ["${data.aws_availability_zones.all.names}"]
-    security_groups = ["${aws_security_group.web-elb.id}"]
+  security_groups = ["${aws_security_group.web-elb.id}"]
 
 	listener {
 	lb_port		= "${var.web_elb_port}"
@@ -45,33 +47,46 @@ resource "aws_elb" "example" {
 	interval		= 30
 	target			= "HTTP:${var.web_server_port}/"
 	}
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
 }
 
 
 
 resource "aws_autoscaling_group" "example" {
-	launch_configuration = "${aws_launch_configuration.example.id}"
-	availability_zones = ["${data.aws_availability_zones.all.names}"]
-	
-	load_balancers	= ["${aws_elb.example.name}"]
-	health_check_type = "ELB"
+  name = "${var.cluster_name}-${aws_launch_configuration.example.name}"
 
-	min_size = "${var.min_size}"
-	max_size = "${var.max_size}"
+  launch_configuration = "${aws_launch_configuration.example.id}"
+  availability_zones   = ["${data.aws_availability_zones.all.names}"]
+  load_balancers       = ["${aws_elb.example.name}"]
+  health_check_type    = "ELB"
 
-        tags    {
-			key	= "Name"
-			value	= "${var.cluster_name}"
-			propagate_at_launch = true
-        }
+  min_size         = "${var.min_size}"
+  max_size         = "${var.max_size}"
+  min_elb_capacity = "${var.min_size}"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${var.cluster_name}"
+    propagate_at_launch = true
+  }
 }
 
+
+
 resource "aws_launch_configuration" "example" {
-	image_id	= "${var.image_id}"
+	image_id = "${var.ami}"
 	instance_type	= "${var.instance_type}"
 	security_groups = ["${aws_security_group.webinstance.id}"]
 
-	user_data	= "${data.template_file.user_data.rendered}"
+  user_data = "${data.template_file.user_data.rendered}"
 
 	lifecycle {
 		create_before_destroy = true
@@ -96,7 +111,13 @@ resource "aws_security_group_rule" "allow_http_inbound_instance" {
 
 resource "aws_security_group" "web-elb" {
         name    =       "elb-${var.cluster_name}"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
 }
+
 resource "aws_security_group_rule" "allow_http_inbound" {
 	type 	= "ingress"
 	security_group_id	=	"${aws_security_group.web-elb.id}"
@@ -105,6 +126,7 @@ resource "aws_security_group_rule" "allow_http_inbound" {
         protocol        =       "tcp"
         cidr_blocks     =       ["0.0.0.0/0"]
 }
+
 resource "aws_security_group_rule" "allow_all_outbound" {
 	type 	= "egress"
 	security_group_id	=	"${aws_security_group.web-elb.id}"
@@ -140,4 +162,41 @@ resource "aws_autoscaling_schedule" "scale_in_at_night" {
 
     autoscaling_group_name  = "${aws_autoscaling_group.example.name}"
     
+}
+
+
+resource "aws_cloudwatch_metric_alarm" "high_cpu_utilization" {
+  alarm_name  = "${var.cluster_name}-high-cpu-utilization"
+  namespace   = "AWS/EC2"
+  metric_name = "CPUUtilization"
+
+  dimensions = {
+    AutoScalingGroupName = "${aws_autoscaling_group.example.name}"
+  }
+
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  period              = 300
+  statistic           = "Average"
+  threshold           = 90
+  unit                = "Percent"
+}
+
+resource "aws_cloudwatch_metric_alarm" "low_cpu_credit_balance" {
+  count = "${format("%.1s", var.instance_type) == "t" ? 1 : 0}"
+
+  alarm_name  = "${var.cluster_name}-low-cpu-credit-balance"
+  namespace   = "AWS/EC2"
+  metric_name = "CPUCreditBalance"
+
+  dimensions = {
+    AutoScalingGroupName = "${aws_autoscaling_group.example.name}"
+  }
+
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 1
+  period              = 300
+  statistic           = "Minimum"
+  threshold           = 10
+  unit                = "Count"
 }
